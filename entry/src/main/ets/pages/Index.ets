@@ -33,7 +33,7 @@ struct Index {
 
       Divider().strokeWidth(1).color(Color.Gray).margin({ bottom: 10 })
 
-      if (this.markmapData) {
+      if (this.markmapData?.children[0]) {
         Scroll() {
           MarkmapNode({ content: this.markmapData.children[0] })
         }
