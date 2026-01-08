@@ -1,0 +1,13 @@
+{
+  "module": {
+    "name": "markmap_next",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet",
+      "2in1",
+      "car",
+      "tv"
+    ]
+  }
+}
