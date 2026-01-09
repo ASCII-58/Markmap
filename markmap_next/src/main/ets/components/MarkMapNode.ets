@@ -13,7 +13,7 @@ import { MarkmapNodeData } from '../utils/MarkdownParse';
 export struct MarkmapNode {
   @Prop index: number = 0
   @Prop content: MarkmapNodeData
-  @Prop MaxWidth: Length = 150
+  @Prop MaxWidth: Length
   @Prop BorderWidth: Length = 2
   @Prop BorderColor: Color | number | string | Resource
   // 曲线绘制区域的尺寸
@@ -47,12 +47,12 @@ export struct MarkmapNode {
 
   build() {
     Row() {
-      // ========== 内容区域 ==========
+      // ========== 内容区域 =========3=
       // 包含 Markdown 文本和连接圆点
       Row() {
         Markdown({ text: this.content.content })
           .constraintSize({
-            maxWidth: (typeof this.MaxWidth === 'number') ? (this.MaxWidth as number) - 20 : this.MaxWidth
+            maxWidth: this.MaxWidth ? this.MaxWidth:undefined
           })
           .border({
             width: { bottom: this.BorderWidth },

@@ -1,4 +1,4 @@
-import { MarkdownParser, MarkmapNode, MarkmapNodeData } from 'markmap_next';
+import { ContentMode, MarkdownParser, MarkmapNode, MarkmapNodeData } from 'markmap_next';
 
 @Entry
 @Component
@@ -16,8 +16,8 @@ struct Index {
   }
 
   updateMarkmap(content: string) {
-    const parser = new MarkdownParser();
-    this.markmapData = parser.parse(content);
+    this.markmapData = MarkdownParser(content, ContentMode.AsChildren);
+    console.log(JSON.stringify(this.markmapData), 'markmapjson')
   }
 
   build() {
@@ -35,11 +35,17 @@ struct Index {
 
       if (this.markmapData?.children[0]) {
         Scroll() {
-          MarkmapNode({ content: this.markmapData.children[0] })
+          Scroll() {
+            MarkmapNode({ content: this.markmapData!.children[0] })
+              .margin(20)
+          }
+          .scrollable(ScrollDirection.Horizontal)
+            .align(Alignment.TopStart)
         }
         .width('100%')
         .layoutWeight(1)
         .align(Alignment.TopStart)
+          .scrollable(ScrollDirection.Vertical)
       }
     }
     .width('100%')
