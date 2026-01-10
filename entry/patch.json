@@ -1,7 +1,7 @@
 {
   "app": {
     "bundleName": "com.xhub.markmappackagetest",
-    "patchVersionCode": 2000035,
+    "patchVersionCode": 2000036,
     "versionCode": 1000000
   },
   "module": {

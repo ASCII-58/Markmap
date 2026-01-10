@@ -1,4 +1,4 @@
-import { ContentMode, MarkdownParser, MarkmapNode, MarkmapNodeData } from 'markmap_next';
+import { MarkdownParser, MarkmapNode, MarkmapNodeData } from 'markmap_next';
 
 @Entry
 @Component
@@ -16,7 +16,7 @@ struct Index {
   }
 
   updateMarkmap(content: string) {
-    this.markmapData = MarkdownParser(content, ContentMode.AsChildren);
+    this.markmapData = MarkdownParser(content);
     console.log(JSON.stringify(this.markmapData), 'markmapjson')
   }
 

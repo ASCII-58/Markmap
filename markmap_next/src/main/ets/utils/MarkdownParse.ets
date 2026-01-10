@@ -1,13 +1,21 @@
+
+@Observed
+export class MarkmapNodeData {
+  id: string = '';
+  content: string = '';
+  children: MarkmapNodeData[] = [];
+  size?: NodeSize;
+
+  constructor(id: string = '', content: string = '', children: MarkmapNodeData[] = []) {
+    this.id = id;
+    this.content = content;
+    this.children = children;
+  }
+}
+
 export interface NodeSize {
   width: number;
   height: number;
-}
-
-export interface MarkmapNodeData {
-  id?: string;
-  content: string;
-  children: MarkmapNodeData[];
-  size?: NodeSize
 }
 
 /**
@@ -24,12 +32,14 @@ export function MarkdownParser(markdown: string): MarkmapNodeData {
   // 按行分割
   const lines = normalizedMarkdown.split('\n');
 
-  // 根节点
-  const root: MarkmapNodeData = {
-    id: 'root',
-    content: 'root',
-    children: []
+  // ID生成器上下文
+  let idCounter = 0;
+  const generateId = (): string => {
+    return `node_${idCounter++}`;
   };
+
+  // 根节点
+  const root: MarkmapNodeData = new MarkmapNodeData('root', 'root', []);
 
   interface StackItem {
     node: MarkmapNodeData;
@@ -75,11 +85,7 @@ export function MarkdownParser(markdown: string): MarkmapNodeData {
       const level = headingMatch[1].length;
       const content = headingMatch[2].trim();
 
-      const newNode: MarkmapNodeData = {
-        id: generateId(),
-        content: content,
-        children: []
-      };
+      const newNode = new MarkmapNodeData(generateId(), content, []);
 
       // 从栈中弹出:
       // 1. 所有列表项 (标题会打断列表)
@@ -106,11 +112,7 @@ export function MarkdownParser(markdown: string): MarkmapNodeData {
       const indent = listMatch[1].length;
       const content = listMatch[3].trim();
 
-      const newNode: MarkmapNodeData = {
-        id: generateId(),
-        content: content,
-        children: []
-      };
+      const newNode = new MarkmapNodeData(generateId(), content, []);
 
       // 列表处理逻辑：
       // 从栈顶开始，如果栈顶是列表项且缩进 >= 当前缩进，则弹出 (视为同级或上级结束)
@@ -139,11 +141,7 @@ export function MarkdownParser(markdown: string): MarkmapNodeData {
       // 如果是根节点，总是添加为独立子节点（避免根节点有内容）
       // 或者普通节点上下文 (Header 或 List Item) 也作为子节点
       if (lastWasEmpty || !lastAddedNodeWasContent) {
-        const contentNode: MarkmapNodeData = {
-          id: generateId(),
-          content: trimmed,
-          children: []
-        };
+        const contentNode = new MarkmapNodeData(generateId(), trimmed, []);
         currentNode.children.push(contentNode);
         lastAddedNodeWasContent = true;
       } else {
@@ -157,11 +155,4 @@ export function MarkdownParser(markdown: string): MarkmapNodeData {
   }
 
   return root;
-}
-
-/**
- * 生成唯一ID
- */
-function generateId(): string {
-  return `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
