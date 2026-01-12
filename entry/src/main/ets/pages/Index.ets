@@ -1,4 +1,4 @@
-import { MarkdownParser, MarkmapNode, MarkmapNodeData } from 'markmap_next';
+import { Markmap } from 'markmap_next';
 
 @Entry
 @Component
@@ -9,44 +9,22 @@ struct Index {
   - Grandchild 2.1
   - Grandchild 2.2
 `;
-  @State markmapData: MarkmapNodeData | null = null;
-
-  aboutToAppear() {
-    this.updateMarkmap(this.markdownContent);
-  }
-
-  updateMarkmap(content: string) {
-    this.markmapData = MarkdownParser(content);
-    console.log(JSON.stringify(this.markmapData), 'markmapjson')
-  }
 
   build() {
     Column() {
-      TextArea({ text: this.markdownContent })
+      TextArea({ text: $$this.markdownContent })
         .width('100%')
         .height('30%')
-        .onChange((value: string) => {
-          this.markdownContent = value;this.updateMarkmap(value);
-
-        })
+        // .onChange((value: string) => {
+        //   this.markdownContent = value;
+        // })
         .margin({ bottom: 10 })
 
       Divider().strokeWidth(1).color(Color.Gray).margin({ bottom: 10 })
 
-      if (this.markmapData?.children[0]) {
-        Scroll() {
-          Scroll() {
-            MarkmapNode({ content: this.markmapData!.children[0] })
-              .margin(20)
-          }
-          .scrollable(ScrollDirection.Horizontal)
-            .align(Alignment.TopStart)
-        }
+      Markmap({ markdown: $markdownContent })
         .width('100%')
-        .layoutWeight(1)
-        .align(Alignment.TopStart)
-          .scrollable(ScrollDirection.Vertical)
-      }
+        .height('50%')
     }
     .width('100%')
     .height('100%')

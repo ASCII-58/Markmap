@@ -1,10 +1,17 @@
-
 @Observed
 export class MarkmapNodeData {
-  id: string = '';
-  content: string = '';
-  children: MarkmapNodeData[] = [];
-  size?: NodeSize;
+  public id: string = '';
+  public content: string = '';
+  public children: MarkmapNodeData[] = [];
+
+  // 渲染布局属性
+  public width: number = 0;
+  public height: number = 0;
+  public x: number = 0;
+  public y: number = 0;
+  public depth: number = 0; // 核心：用于控制线条颜色或层级样式
+  public display: boolean = true;
+  public parent: MarkmapNodeData | null = null;
 
   constructor(id: string = '', content: string = '', children: MarkmapNodeData[] = []) {
     this.id = id;
@@ -13,146 +20,169 @@ export class MarkmapNodeData {
   }
 }
 
-export interface NodeSize {
-  width: number;
-  height: number;
+/**
+ * 内部状态接口：只在解析时使用，不暴露给外部
+ * 用于记录栈中节点的元数据，以便处理层级关系
+ */
+interface StackItem {
+  node: MarkmapNodeData;
+  level: number; // 标题级别 (1-6)，非标题为 -1
+  indent: number; // 列表缩进字符数
+  nodeType: 'root' | 'heading' | 'list'; // 仅在解析过程中区分类型
 }
 
-/**
- * Markdown解析器，处理markdown为MarkmapNodeData树形结构
- * 支持标题级别作为树的层级
- * @param markdown markdown文本内容
- * @returns MarkmapNodeData树形结构
- */
 export function MarkdownParser(markdown: string): MarkmapNodeData {
+  // 1. 预处理：移除BOM，统一换行，将Tab转换为空格(避免缩进混乱)
+  const normalizedMarkdown = markdown
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\t/g, '    ');
 
-  // 移除BOM和规范化行尾
-  const normalizedMarkdown = markdown.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
-
-  // 按行分割
   const lines = normalizedMarkdown.split('\n');
 
-  // ID生成器上下文
   let idCounter = 0;
-  const generateId = (): string => {
-    return `node_${idCounter++}`;
-  };
+  const generateId = (): string => `node_${idCounter++}`;
 
-  // 根节点
-  const root: MarkmapNodeData = new MarkmapNodeData('root', 'root', []);
+  // 创建虚拟根节点
+  const root = new MarkmapNodeData(generateId(), 'MindMap', []);
+  root.depth = 0;
 
-  interface StackItem {
-    node: MarkmapNodeData;
-    level: number; // 标题级别 (1-6)，非标题为-1
-    type: 'root' | 'heading' | 'list';
-    indent: number; // 缩进层级
-  }
+  // 栈初始化
+  const stack: StackItem[] = [{
+    node: root,
+    level: 0,
+    indent: -1,
+    nodeType: 'root'
+  }];
 
-  // 用栈来维护树的结构
-  const stack: StackItem[] = [{ node: root, level: 0, type: 'root', indent: -1 }];
-
-  // 状态跟踪
-  let lastWasEmpty = true;
-  let lastAddedNodeWasContent = false;
   let inCodeBlock = false;
+  let lastLineWasText = false; // 用于合并多行文本段落
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const trimmed = line.trim();
 
+    // --- 1. 边界情况过滤 ---
     if (trimmed.startsWith('```')) {
       inCodeBlock = !inCodeBlock;
     }
-
-    if (!inCodeBlock && !trimmed) {
-      lastWasEmpty = true;
+    if (inCodeBlock || !trimmed) {
+      lastLineWasText = false;
+      continue;
+    }
+    if (/^[-*_]{3,}$/.test(trimmed)) {
+      lastLineWasText = false;
       continue;
     }
 
-    // 忽略分割线
-    if (!inCodeBlock && /^[-]{3,}$/.test(trimmed)) {
-      lastWasEmpty = true;
-      continue;
-    }
-
-    // 检测标题 (#, ##, ###等)
-    const headingMatch = !inCodeBlock && trimmed.match(/^(#+)\s+(.+)$/);
-
-    // 检测列表项 (-, *, +, 1. 等)
-    // 捕获组: 1=缩进, 2=标记, 3=内容
-    const listMatch = !inCodeBlock && line.match(/^(\s*)([-*+]|\d+\.)\s+(.+)$/);
+    // --- 2. 正则匹配 ---
+    // 匹配标题: # 标题
+    const headingMatch = line.match(/^(\s*)(#+)\s+(.+)$/);
+    // 匹配列表: - 列表 / 1. 列表
+    const listMatch = line.match(/^(\s*)([-*+]|\d+\.)\s+(.+)$/);
 
     if (headingMatch) {
-      const level = headingMatch[1].length;
-      const content = headingMatch[2].trim();
+      // === 处理标题 ===
+      const levelStr = headingMatch[2];
+      const content = headingMatch[3].trim();
+      const newLevel = levelStr.length;
 
       const newNode = new MarkmapNodeData(generateId(), content, []);
 
-      // 从栈中弹出:
-      // 1. 所有列表项 (标题会打断列表)
-      // 2. 级别大于等于当前标题的已有标题
+      // 逻辑：弹出栈中层级 >= 当前标题层级的标题，以及所有列表
       while (
         stack.length > 1 &&
-        (stack[stack.length - 1].type === 'list' ||
-          (stack[stack.length - 1].type === 'heading' && stack[stack.length - 1].level >= level))
+          (stack[stack.length - 1].nodeType === 'list' ||
+            (stack[stack.length - 1].nodeType === 'heading' && stack[stack.length - 1].level >= newLevel))
       ) {
         stack.pop();
       }
 
-      // 将新节点添加到当前栈顶节点的children中
-      stack[stack.length - 1].node.children.push(newNode);
-
-      // 新节点入栈
-      stack.push({ node: newNode, level: level, type: 'heading', indent: -1 });
-
-      // 重置状态
-      lastWasEmpty = true;
-      lastAddedNodeWasContent = false;
-
-    } else if (listMatch) {
-      const indent = listMatch[1].length;
-      const content = listMatch[3].trim();
-
-      const newNode = new MarkmapNodeData(generateId(), content, []);
-
-      // 列表处理逻辑：
-      // 从栈顶开始，如果栈顶是列表项且缩进 >= 当前缩进，则弹出 (视为同级或上级结束)
-      // 如果遇到标题或root则停止 (列表是在标题下的)
-      while (
-        stack.length > 1 &&
-        stack[stack.length - 1].type === 'list' &&
-        stack[stack.length - 1].indent >= indent
-      ) {
-        stack.pop();
-      }
-
-      // 添加为子节点
-      stack[stack.length - 1].node.children.push(newNode);
+      // 挂载
+      const parentItem = stack[stack.length - 1];
+      newNode.parent = parentItem.node;
+      newNode.depth = parentItem.node.depth + 1; // 计算深度
+      parentItem.node.children.push(newNode);
 
       // 入栈
-      stack.push({ node: newNode, level: -1, type: 'list', indent: indent });
+      stack.push({
+        node: newNode,
+        level: newLevel,
+        indent: -1,
+        nodeType: 'heading'
+      });
 
-      lastWasEmpty = true; // 列表项后视为新块
-      lastAddedNodeWasContent = false;
+      lastLineWasText = false;
 
-    } else {
-      // 非标题且非列表行 (普通文本/段落)
-      const currentNode = stack[stack.length - 1].node;
+    } else if (listMatch) {
+      // === 处理列表 ===
+      const indentStr = listMatch[1];
+      const content = listMatch[3].trim();
+      const newIndent = indentStr.length;
 
-      // 如果是根节点，总是添加为独立子节点（避免根节点有内容）
-      // 或者普通节点上下文 (Header 或 List Item) 也作为子节点
-      if (lastWasEmpty || !lastAddedNodeWasContent) {
-        const contentNode = new MarkmapNodeData(generateId(), trimmed, []);
-        currentNode.children.push(contentNode);
-        lastAddedNodeWasContent = true;
-      } else {
-        // 追加到上一个内容节点
-        const lastChild = currentNode.children[currentNode.children.length - 1];
-        lastChild.content += '\n' + trimmed;
+      const newNode = new MarkmapNodeData(generateId(), content, []);
+
+      // 逻辑：如果栈顶也是列表，且当前缩进 <= 栈顶缩进，说明层级结束，弹出
+      while (
+        stack.length > 1 &&
+          stack[stack.length - 1].nodeType === 'list' &&
+          stack[stack.length - 1].indent >= newIndent
+      ) {
+        stack.pop();
       }
 
-      lastWasEmpty = false;
+      // 挂载
+      const parentItem = stack[stack.length - 1];
+      newNode.parent = parentItem.node;
+      newNode.depth = parentItem.node.depth + 1; // 计算深度
+      parentItem.node.children.push(newNode);
+
+      // 入栈
+      stack.push({
+        node: newNode,
+        level: -1,
+        indent: newIndent,
+        nodeType: 'list'
+      });
+
+      lastLineWasText = false;
+
+    } else {
+      // === 处理普通文本段落 ===
+      const parentNode = stack[stack.length - 1].node;
+
+      if (lastLineWasText && parentNode.children.length > 0) {
+        // 如果上一行也是纯文本，则合并到同一个节点（实现多行段落）
+        const lastChild = parentNode.children[parentNode.children.length - 1];
+        lastChild.content += '\n' + trimmed;
+      } else {
+        // 否则创建新节点
+        const pNode = new MarkmapNodeData(generateId(), trimmed, []);
+        pNode.parent = parentNode;
+        pNode.depth = parentNode.depth + 1; // 计算深度
+        parentNode.children.push(pNode);
+      }
+
+      lastLineWasText = true;
     }
   }
 
+  // 3. 根节点优化：如果Root只有一个Heading子节点，将其提升为根，使图表更美观
+  if (root.children.length === 1 && root.children[0].children.length > 0) {
+    const realRoot = root.children[0];
+    realRoot.parent = null;
+    // 递归修正深度 (因为根节点变了，所有子节点深度-1)
+    adjustDepth(realRoot, 0);
+    return realRoot;
+  }
+
   return root;
+}
+
+// 辅助函数：递归修正深度
+function adjustDepth(node: MarkmapNodeData, depth: number) {
+  node.depth = depth;
+  for (const child of node.children) {
+    adjustDepth(child, depth + 1);
+  }
 }
